@@ -1,0 +1,393 @@
+import { useState, useEffect, useRef } from "react";
+
+const FLAVORS_DEFAULT = [
+  { id: 1, name: "Vanilla", emoji: "🍦", points: 0, wins: 0, losses: 0 },
+  { id: 2, name: "Chocolate", emoji: "🍫", points: 0, wins: 0, losses: 0 },
+  { id: 3, name: "Strawberry", emoji: "🍓", points: 0, wins: 0, losses: 0 },
+  { id: 4, name: "Mint Chip", emoji: "🌿", points: 0, wins: 0, losses: 0 },
+  { id: 5, name: "Cookie Dough", emoji: "🍪", points: 0, wins: 0, losses: 0 },
+  { id: 6, name: "Rocky Road", emoji: "🏔️", points: 0, wins: 0, losses: 0 },
+  { id: 7, name: "Butter Pecan", emoji: "🥜", points: 0, wins: 0, losses: 0 },
+  { id: 8, name: "Pistachio", emoji: "💚", points: 0, wins: 0, losses: 0 },
+];
+
+function getPair(flavors, lastPair) {
+  if (flavors.length < 2) return [0, 1];
+  let a, b;
+  let tries = 0;
+  do {
+    a = Math.floor(Math.random() * flavors.length);
+    b = Math.floor(Math.random() * flavors.length);
+    tries++;
+  } while ((a === b || (lastPair && a === lastPair[0] && b === lastPair[1])) && tries < 20);
+  return [a, b];
+}
+
+const DRIP_COLORS = ["#f97316","#e84393","#a78bfa","#34d399","#fbbf24","#60a5fa","#f472b6","#fb923c"];
+
+export default function App() {
+  const [flavors, setFlavors] = useState(FLAVORS_DEFAULT);
+  const [pair, setPair] = useState([0, 1]);
+  const [view, setView] = useState("battle");
+  const [matchCount, setMatchCount] = useState(0);
+  const [flash, setFlash] = useState(null); // 0 or 1
+  const [newName, setNewName] = useState("");
+  const [newEmoji, setNewEmoji] = useState("🍨");
+  const [particles, setParticles] = useState([]);
+  const [justWon, setJustWon] = useState(null);
+  const nextId = useRef(100);
+
+  const [idxA, idxB] = pair;
+  const flavorA = flavors[idxA];
+  const flavorB = flavors[idxB];
+
+  function spawnParticles(side) {
+    const newP = Array.from({length: 10}, (_, i) => ({
+      id: Date.now() + i,
+      side,
+      x: Math.random() * 80 - 40,
+      y: Math.random() * -80 - 20,
+      color: DRIP_COLORS[Math.floor(Math.random() * DRIP_COLORS.length)],
+      size: Math.random() * 12 + 8,
+      delay: Math.random() * 0.2,
+    }));
+    setParticles(p => [...p, ...newP]);
+    setTimeout(() => setParticles(p => p.filter(x => !newP.map(n=>n.id).includes(x.id))), 900);
+  }
+
+  function pickWinner(winIdx, loseIdx, side) {
+    if (flash !== null) return;
+    setFlash(side);
+    setJustWon(flavors[winIdx].name);
+    spawnParticles(side);
+    setFlavors(prev => prev.map((f, i) => {
+      if (i === winIdx) return { ...f, points: f.points + 3, wins: f.wins + 1 };
+      if (i === loseIdx) return { ...f, points: Math.max(0, f.points - 1), losses: f.losses + 1 };
+      return f;
+    }));
+    setMatchCount(c => c + 1);
+    setTimeout(() => {
+      setFlash(null);
+      setJustWon(null);
+      setPair(getPair(flavors, pair));
+    }, 750);
+  }
+
+  function skip() {
+    if (flash !== null) return;
+    setPair(getPair(flavors, pair));
+  }
+
+  function addFlavor() {
+    if (!newName.trim()) return;
+    const f = { id: nextId.current++, name: newName.trim(), emoji: newEmoji, points: 0, wins: 0, losses: 0 };
+    const updated = [...flavors, f];
+    setFlavors(updated);
+    setNewName("");
+    setView("battle");
+    setTimeout(() => setPair(getPair(updated, pair)), 50);
+  }
+
+  function resetAll() {
+    const reset = FLAVORS_DEFAULT.map(f => ({...f, points:0,wins:0,losses:0}));
+    setFlavors(reset);
+    setPair([0,1]);
+    setMatchCount(0);
+  }
+
+  const sorted = [...flavors].sort((a, b) => b.points - a.points || b.wins - a.wins);
+  const topPoints = sorted[0]?.points || 1;
+
+  return (
+    <div style={{
+      minHeight:"100vh",
+      background:"#0f0a1e",
+      fontFamily:"'Georgia',serif",
+      color:"#fff",
+      overflowX:"hidden",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0;}
+        .syne{font-family:'Syne',sans-serif;}
+        .dm{font-family:'DM Sans',sans-serif;}
+
+        .card {
+          position:relative;
+          background:linear-gradient(145deg,#1e1535,#2a1f4a);
+          border-radius:28px;
+          padding:36px 28px 32px;
+          cursor:pointer;
+          border:2px solid rgba(255,255,255,0.07);
+          transition:transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.22s, border-color 0.22s;
+          flex:1;
+          text-align:center;
+          overflow:visible;
+          user-select:none;
+        }
+        .card:hover{
+          transform:translateY(-10px) scale(1.035);
+          box-shadow:0 24px 60px rgba(232,67,147,0.22);
+          border-color:rgba(232,67,147,0.5);
+        }
+        .card:active{transform:scale(0.96);}
+        .card.win{
+          border-color:#ffd700 !important;
+          background:linear-gradient(145deg,#2a2000,#3a2e00) !important;
+          animation:cardWin 0.65s ease;
+        }
+        .card.lose{
+          opacity:0.5;
+          filter:grayscale(0.6);
+        }
+        @keyframes cardWin{0%{transform:scale(1)}40%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+        .particle{
+          position:absolute;
+          border-radius:50%;
+          pointer-events:none;
+          animation:burst 0.9s ease-out forwards;
+        }
+        @keyframes burst{
+          0%{opacity:1;transform:translate(0,0) scale(1);}
+          100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0);}
+        }
+
+        .nav-tab{
+          background:none;border:none;cursor:pointer;
+          font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;
+          letter-spacing:2px;text-transform:uppercase;
+          padding:9px 20px;border-radius:30px;
+          transition:all 0.2s;color:rgba(255,255,255,0.4);
+        }
+        .nav-tab.active{background:rgba(255,255,255,0.1);color:#fff;}
+        .nav-tab:hover:not(.active){color:rgba(255,255,255,0.7);}
+
+        .rank-bar-fill{
+          height:100%;border-radius:4px;
+          background:linear-gradient(90deg,#e84393,#f97316);
+          transition:width 0.6s cubic-bezier(.34,1.56,.64,1);
+        }
+
+        .add-input{
+          background:rgba(255,255,255,0.07);
+          border:1.5px solid rgba(255,255,255,0.12);
+          border-radius:14px;padding:12px 16px;
+          color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;
+          outline:none;width:100%;
+          transition:border 0.2s;
+        }
+        .add-input:focus{border-color:#e84393;}
+        .add-input::placeholder{color:rgba(255,255,255,0.25);}
+
+        .pink-btn{
+          background:linear-gradient(135deg,#e84393,#f97316);
+          color:#fff;border:none;border-radius:14px;
+          padding:13px 28px;cursor:pointer;
+          font-family:'DM Sans',sans-serif;font-weight:500;font-size:15px;
+          transition:opacity 0.2s,transform 0.2s;width:100%;
+          letter-spacing:0.5px;
+        }
+        .pink-btn:hover{opacity:0.88;transform:translateY(-2px);}
+
+        .glow-badge{
+          display:inline-block;
+          background:linear-gradient(135deg,#e84393,#a78bfa);
+          border-radius:20px;padding:3px 12px;
+          font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;
+          letter-spacing:1px;
+        }
+
+        .skip-btn{
+          background:rgba(255,255,255,0.06);border:1.5px solid rgba(255,255,255,0.1);
+          border-radius:30px;padding:8px 22px;cursor:pointer;
+          color:rgba(255,255,255,0.45);font-family:'DM Sans',sans-serif;
+          font-size:12px;letter-spacing:1px;text-transform:uppercase;
+          transition:all 0.2s;
+        }
+        .skip-btn:hover{color:rgba(255,255,255,0.8);border-color:rgba(255,255,255,0.3);}
+      `}</style>
+
+      {/* Background orbs */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,overflow:"hidden"}}>
+        <div style={{position:"absolute",top:-120,left:-80,width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(232,67,147,0.18) 0%,transparent 70%)"}}/>
+        <div style={{position:"absolute",bottom:-80,right:-60,width:350,height:350,borderRadius:"50%",background:"radial-gradient(circle,rgba(167,139,250,0.15) 0%,transparent 70%)"}}/>
+        <div style={{position:"absolute",top:"40%",left:"60%",width:250,height:250,borderRadius:"50%",background:"radial-gradient(circle,rgba(249,115,22,0.10) 0%,transparent 70%)"}}/>
+      </div>
+
+      <div style={{position:"relative",zIndex:1}}>
+        {/* Header */}
+        <div style={{textAlign:"center",padding:"40px 20px 8px"}}>
+          <div style={{fontSize:48,marginBottom:8}}>🍨</div>
+          <h1 className="syne" style={{fontSize:"clamp(28px,6vw,48px)",fontWeight:800,letterSpacing:"-1.5px",lineHeight:1,marginBottom:8,
+            background:"linear-gradient(135deg,#fff 30%,#f9a8d4 70%,#fbbf24 100%)",
+            WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"
+          }}>Scoop Rankings</h1>
+          <div className="dm" style={{fontSize:12,letterSpacing:3,textTransform:"uppercase",color:"rgba(255,255,255,0.3)",marginBottom:20}}>
+            {matchCount} battles · {flavors.length} flavors
+          </div>
+        </div>
+
+        {/* Nav */}
+        <div style={{display:"flex",justifyContent:"center",gap:4,padding:"0 20px 28px",flexWrap:"wrap"}}>
+          {[["battle","⚔️ Battle"],["leaderboard","🏆 Rankings"],["add","＋ Add Flavor"]].map(([v,label])=>(
+            <button key={v} className={`nav-tab ${view===v?"active":""}`} onClick={()=>setView(v)}>{label}</button>
+          ))}
+        </div>
+
+        {/* BATTLE */}
+        {view === "battle" && flavorA && flavorB && (
+          <div style={{maxWidth:560,margin:"0 auto",padding:"0 20px 60px"}}>
+            {justWon && (
+              <div style={{textAlign:"center",marginBottom:16,animation:"fadeIn 0.3s ease"}}>
+                <span className="glow-badge">✨ {justWon} wins! +3 pts</span>
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:16,alignItems:"stretch",marginBottom:24,position:"relative"}}>
+              {[{flavor:flavorA,winIdx:idxA,loseIdx:idxB,side:0},{flavor:flavorB,winIdx:idxB,loseIdx:idxA,side:1}].map(({flavor,winIdx,loseIdx,side},ci)=>(
+                <div key={flavor.id} className={`card ${flash===side?"win":flash!==null&&flash!==side?"lose":""}`}
+                  onClick={()=>pickWinner(winIdx,loseIdx,side)}
+                  style={{position:"relative"}}
+                >
+                  {/* Particles */}
+                  {particles.filter(p=>p.side===side).map(p=>(
+                    <div key={p.id} className="particle" style={{
+                      width:p.size,height:p.size,background:p.color,
+                      left:`calc(50% + ${p.x}px)`,bottom:"60%",
+                      "--tx":`${p.x*2}px`,"--ty":`${p.y}px`,
+                      animationDelay:`${p.delay}s`
+                    }}/>
+                  ))}
+
+                  <div style={{fontSize:"clamp(48px,12vw,72px)",marginBottom:16,lineHeight:1,transition:"transform 0.2s"}}>
+                    {flavor.emoji}
+                  </div>
+                  <div className="syne" style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,color:"#fff",marginBottom:10,letterSpacing:"-0.5px"}}>
+                    {flavor.name}
+                  </div>
+                  <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:8}}>
+                    <span className="dm" style={{fontSize:20,fontWeight:700,background:"linear-gradient(135deg,#e84393,#f97316)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>
+                      {flavor.points}
+                    </span>
+                    <span className="dm" style={{fontSize:12,color:"rgba(255,255,255,0.3)",alignSelf:"center",letterSpacing:1}}>PTS</span>
+                  </div>
+                  <div className="dm" style={{fontSize:12,color:"rgba(255,255,255,0.25)",letterSpacing:1}}>
+                    {flavor.wins}W · {flavor.losses}L
+                  </div>
+                </div>
+              ))}
+
+              {/* VS badge */}
+              <div style={{
+                position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
+                zIndex:10,
+                background:"#0f0a1e",border:"2px solid rgba(255,255,255,0.12)",
+                borderRadius:"50%",width:44,height:44,
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+                <span className="syne" style={{fontSize:13,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1}}>VS</span>
+              </div>
+            </div>
+
+            <div style={{textAlign:"center",marginBottom:16}}>
+              <div className="dm" style={{fontSize:12,color:"rgba(255,255,255,0.25)",letterSpacing:2,textTransform:"uppercase",marginBottom:16}}>
+                Tap the flavor you'd choose
+              </div>
+              <button className="skip-btn" onClick={skip}>Skip →</button>
+            </div>
+
+            <div style={{
+              background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",
+              borderRadius:16,padding:"12px 18px",
+              display:"flex",justifyContent:"space-between",alignItems:"center"
+            }}>
+              <span className="dm" style={{fontSize:12,color:"rgba(255,255,255,0.3)",letterSpacing:1,textTransform:"uppercase"}}>Win +3 pts · Lose −1 pt</span>
+              <span style={{fontSize:16}}>⭐</span>
+            </div>
+          </div>
+        )}
+
+        {/* LEADERBOARD */}
+        {view === "leaderboard" && (
+          <div style={{maxWidth:500,margin:"0 auto",padding:"0 20px 60px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+              <span className="dm" style={{fontSize:11,letterSpacing:3,textTransform:"uppercase",color:"rgba(255,255,255,0.3)"}}>
+                {flavors.length} flavors
+              </span>
+              <button onClick={resetAll} style={{background:"none",border:"1.5px solid rgba(232,67,147,0.35)",borderRadius:20,padding:"5px 16px",color:"#e84393",cursor:"pointer",fontFamily:"'DM Sans',sans-serif",fontSize:12,fontWeight:500}}>
+                Reset
+              </button>
+            </div>
+
+            {sorted.map((f, i) => {
+              const pct = topPoints > 0 ? (f.points / topPoints) * 100 : 0;
+              const medals = ["🥇","🥈","🥉"];
+              return (
+                <div key={f.id} style={{
+                  background:"rgba(255,255,255,0.04)",
+                  border:"1.5px solid rgba(255,255,255,0.06)",
+                  borderRadius:18,padding:"16px 20px",marginBottom:10,
+                  transition:"transform 0.2s",cursor:"default",
+                }}>
+                  <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:10}}>
+                    <span style={{fontSize:i<3?22:15,width:28,textAlign:"center",color:"rgba(255,255,255,0.4)"}}>
+                      {i < 3 ? medals[i] : `${i+1}`}
+                    </span>
+                    <span style={{fontSize:28}}>{f.emoji}</span>
+                    <div style={{flex:1}}>
+                      <div className="syne" style={{fontSize:16,fontWeight:800,color:"#fff",letterSpacing:"-0.3px"}}>{f.name}</div>
+                      <div className="dm" style={{fontSize:11,color:"rgba(255,255,255,0.25)",letterSpacing:1}}>{f.wins}W · {f.losses}L</div>
+                    </div>
+                    <div className="syne" style={{fontSize:22,fontWeight:800,
+                      background:i===0?"linear-gradient(135deg,#fbbf24,#f97316)":"linear-gradient(135deg,#e84393,#a78bfa)",
+                      WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"
+                    }}>
+                      {f.points}
+                    </div>
+                  </div>
+                  <div style={{height:6,background:"rgba(255,255,255,0.07)",borderRadius:4,overflow:"hidden"}}>
+                    <div className="rank-bar-fill" style={{width:`${pct}%`}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ADD */}
+        {view === "add" && (
+          <div style={{maxWidth:420,margin:"0 auto",padding:"0 20px 60px"}}>
+            <div style={{background:"rgba(255,255,255,0.04)",border:"1.5px solid rgba(255,255,255,0.08)",borderRadius:24,padding:"32px 28px",marginBottom:24}}>
+              <h2 className="syne" style={{fontSize:24,fontWeight:800,marginBottom:24,letterSpacing:"-0.5px"}}>Add a Flavor</h2>
+              <div style={{marginBottom:16}}>
+                <label className="dm" style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",display:"block",marginBottom:8}}>Name</label>
+                <input className="add-input" type="text" value={newName} onChange={e=>setNewName(e.target.value)} placeholder="e.g. Salted Caramel" onKeyDown={e=>e.key==="Enter"&&addFlavor()} />
+              </div>
+              <div style={{marginBottom:28}}>
+                <label className="dm" style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:"rgba(255,255,255,0.35)",display:"block",marginBottom:8}}>Emoji</label>
+                <input className="add-input" type="text" value={newEmoji} onChange={e=>setNewEmoji(e.target.value)} style={{width:80}} maxLength={2}/>
+              </div>
+              <button className="pink-btn" onClick={addFlavor}>Add to Battle ✨</button>
+            </div>
+
+            <div>
+              <div className="dm" style={{fontSize:11,letterSpacing:3,textTransform:"uppercase",color:"rgba(255,255,255,0.25)",marginBottom:14}}>Current Flavors ({flavors.length})</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                {flavors.map(f=>(
+                  <span key={f.id} style={{
+                    background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",
+                    borderRadius:20,padding:"6px 14px",
+                    fontFamily:"'DM Sans',sans-serif",fontSize:13,color:"rgba(255,255,255,0.7)"
+                  }}>
+                    {f.emoji} {f.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
